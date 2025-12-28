@@ -1,12 +1,13 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const cv = require('opencv4nodejs');
+const ffmpeg = require('fluent-ffmpeg');
 const cors = require('cors')
 const bodyParser = require('body-parser')
 const common = require('./common')
 const path = require('path')
 const fs = require('fs')
+const { exec } = require('child_process');
 
 
 const APP_PORT = 3000;
@@ -23,10 +24,22 @@ const io = socketIo(server, {
 });
 
 var isRecording = false;
-let videoWriter = null;
+let ffmpegProcess = null;
+let videoPath = null;
+
+// Set ffmpeg path (it will be found in system PATH)
+ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 
 // Serve static files (HTML, JS, CSS)
-app.use(express.static('public'));
+// Prefer the frontend build in ../InfraVue_webpage/dist when available,
+// otherwise fall back to the server `public` folder.
+const frontendDist = path.join(__dirname, '../InfraVue_webpage/dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+} else {
+  app.use(express.static('public'));
+}
 
 app.use(cors({
   origin: '*', // Update this to match your React app URL
@@ -36,9 +49,27 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, "../InfraVue_webpage/index.html"))
-});
+// If a built frontend exists, serve its index.html for the root and any
+// client-side routes (SPA fallback). Otherwise keep existing behavior.
+if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+
+  // SPA fallback: return index.html for unknown GET routes (so React Router works)
+  app.get('*', (req, res, next) => {
+    if (req.method !== 'GET') return next();
+    const accept = req.headers.accept || '';
+    if (accept.indexOf('text/html') !== -1) {
+      return res.sendFile(path.join(frontendDist, 'index.html'));
+    }
+    next();
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, "../InfraVue_webpage/index.html"))
+  });
+}
 
 // app.listen(port, () => {
 //   console.log(`Server running on port ${port}`);
@@ -61,21 +92,30 @@ app.post("/api/start_recording", (req, res) => {
   console.log("Start recording request received");
   if (!isRecording) {
     try {
-      const filePath = path.join(common.SAVE_DIR, generateFileName("avi"));
-
-      // Define the codec and create a VideoWriter
-      videoWriter = new cv.VideoWriter(
-        filePath,
-        cv.VideoWriter.fourcc('XVID'), // Codec
-        20, // FPS
-        new cv.Size(640, 480) // Frame size
-      );
-      console.log(`Recording started. Saving to ${filePath}`);
+      videoPath = path.join(common.SAVE_DIR, generateFileName("mp4"));
       isRecording = true;
-      captureAndWriteFrames();
+
+      // Use ffmpeg to capture from /dev/video0 (default camera)
+      ffmpegProcess = ffmpeg('/dev/video0')
+        .inputOptions('-f v4l2')
+        .inputOptions('-video_size 640x480')
+        .inputOptions('-framerate 20')
+        .output(videoPath)
+        .outputOptions('-c:v libx264')
+        .outputOptions('-preset fast')
+        .on('start', () => {
+          console.log(`Recording started. Saving to ${videoPath}`);
+        })
+        .on('error', (err) => {
+          console.error('FFmpeg error:', err);
+          isRecording = false;
+        })
+        .run();
+
       res.status(200).json({ isRecording: true });
     } catch (error) {
       console.error("Error starting recording:", error);
+      isRecording = false;
       res.status(500).json({ error: "Failed to start recording" });
     }
   } else {
@@ -84,11 +124,12 @@ app.post("/api/start_recording", (req, res) => {
 });
 
 app.post('/api/stop_recording', (req, res) => {
-  if (isRecording) {
+  if (isRecording && ffmpegProcess) {
     try {
-      videoWriter.release(); // Stop the recording
+      ffmpegProcess.kill();
       console.log("Recording stopped.");
       isRecording = false;
+      ffmpegProcess = null;
       res.status(200).json({ isRecording: false });
     } catch (error) {
       console.error("Error stopping recording:", error);
@@ -176,82 +217,64 @@ app.get('/api/deleteFile', (req, res) => {
 
 app.get('/api/image_preview', (req, res) => {
   console.log("preview -image file api request received")
-  // Read the folder and get the list of files
   const fileName = req.query.fileName;
-  // console.log("fileName:", fileName)
   const filePath = path.join(common.SAVE_DIR, fileName);
-  // console.log("filePath:", filePath)
+  const extension = path.extname(filePath).toLowerCase();
 
-  const extension = path.extname(filePath);
-  // console.log("extension:",extension);
-  if (extension == ".PNG") {
-    // console.log("file Path is PNG")
-    // Load the image
-    const image = cv.imread(filePath);
-
-    // Scale down the image while maintaining the aspect ratio
-    const maxDim = 300;  // Set the maximum dimension for the scaled-down image
-    const aspectRatio = image.rows / image.cols;
-    let newWidth, newHeight;
-
-    if (image.cols > image.rows) {
-      newWidth = maxDim;
-      newHeight = Math.round(maxDim * aspectRatio);
+  if (extension === ".png" || extension === ".jpg" || extension === ".jpeg") {
+    // For image files, just send them directly
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
     } else {
-      newHeight = maxDim;
-      newWidth = Math.round(maxDim / aspectRatio);
+      res.status(404).send('Image file not found');
     }
-
-    const resizedImage = image.resize(newHeight, newWidth);
-
-    // Encode the image to buffer and send it
-    const imageBuffer = cv.imencode('.jpg', resizedImage);
-
-    res.set('Content-Type', 'image/jpeg');
-    res.send(imageBuffer);
-  } else if (extension == ".avi") {
-    // console.log("extension is avi");
-    // Open the video file
-    const cap = new cv.VideoCapture(filePath);
-
-    // Read the first frame (or any specific frame)
-    let frame = cap.read();
-
-    if (frame.empty) {
-      return res.status(404).send('Could not read video file');
-    }
-
-    // Resize the frame
-    const maxDim = 300;
-    const aspectRatio = frame.rows / frame.cols;
-    let newWidth, newHeight;
-
-    if (frame.cols > frame.rows) {
-      newWidth = maxDim;
-      newHeight = Math.round(maxDim * aspectRatio);
+  } else if (extension === ".mp4" || extension === ".avi" || extension === ".mov") {
+    // Generate thumbnail from video using ffmpeg
+    const thumbnailPath = path.join(common.SAVE_DIR, `thumb_${path.basename(fileName, path.extname(fileName))}.jpg`);
+    
+    if (fs.existsSync(thumbnailPath)) {
+      res.sendFile(thumbnailPath);
     } else {
-      newHeight = maxDim;
-      newWidth = Math.round(maxDim / aspectRatio);
+      // Generate thumbnail
+      ffmpeg(filePath)
+        .screenshot({
+          timestamps: ['00:00:00.500'],
+          filename: `thumb_${path.basename(fileName, path.extname(fileName))}.jpg`,
+          folder: common.SAVE_DIR,
+          size: '300x300'
+        })
+        .on('end', () => {
+          res.sendFile(thumbnailPath);
+        })
+        .on('error', (err) => {
+          console.error('Error generating thumbnail:', err);
+          res.status(500).send('Could not generate thumbnail');
+        });
     }
-
-    const resizedFrame = frame.resize(newHeight, newWidth);
-
-    // Encode the frame to buffer and send it
-    const frameBuffer = cv.imencode('.jpg', resizedFrame);
-
-    res.set('Content-Type', 'image/jpeg');
-    res.send(frameBuffer);
-  }else{
-    res.sendStatus(404, "File extension don't match")
+  } else {
+    res.status(404).send("File extension not supported");
   }
-
-
 });
 
+app.post('/api/start_stream', (req, res) => {
+  try {
+    startCameraStream();
+    res.status(200).json({ streaming: true });
+  } catch (err) {
+    console.error('Error starting stream:', err);
+    res.status(500).json({ error: 'Failed to start stream' });
+  }
+});
 
-
-
-
+app.post('/api/stop_stream', (req, res) => {
+  try {
+    stopCameraStream();
+    res.status(200).json({ streaming: false });
+  } catch (err) {
+    console.error('Error stopping stream:', err);
+    res.status(500).json({ error: 'Failed to stop stream' });
+  }
+});
 
 /**
  * Generates a file name based on the current date and time.
@@ -284,56 +307,63 @@ function generateFileName(extension) {
   return fileName;
 }
 
-// Initialize the camera (0 is usually the default camera)
-const webcam = new cv.VideoCapture(0);
-webcam.set(cv.CAP_PROP_FRAME_WIDTH, 640);
-webcam.set(cv.CAP_PROP_FRAME_HEIGHT, 480);
-
-function captureAndWriteFrames() {
-  // Assume `capture` is an instance of cv.VideoCapture or similar
-  if (isRecording) {
-    // console.log("capture and write called");
-    const frame = webcam.read(); // Capture a frame from the camera or source
-    if (!frame.empty) {
-      // console.log("frame not empty called");
-      videoWriter.write(frame); // Write the frame to the video file
-    }
-
-    // Set a delay to match the desired FPS (e.g., 50 ms for 20 FPS)
-    setTimeout(captureAndWriteFrames, 50);
-  }
-}
-
+// Capture a snapshot from the camera using ffmpeg
+// Capture a snapshot from the camera using Picamera2 via Python helper
 const captureImage = () => {
   try {
-    // Capture a frame from the webcam
-    const frame = webcam.read();
-
-    console.log(common.SAVE_DIR);
-    // Save the captured image to the output folder
-    const filePath = path.join(common.SAVE_DIR, generateFileName("PNG"));
-    console.log(filePath);
-    cv.imwrite(filePath, frame);
-
-    console.log(`Image saved to ${filePath}`);
+    const filePath = path.join(common.SAVE_DIR, generateFileName("jpg"));
+    const script = path.join(__dirname, 'tools', 'capture_image.py');
+    exec(`python3 "${script}" "${filePath}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Error capturing image:', error, stderr);
+      } else {
+        console.log(`Image saved to ${filePath}`);
+      }
+    });
   } catch (error) {
     console.error('Error capturing image:', error);
   }
 };
 
+// Stream camera feed to clients using ffmpeg
+let streamProcess = null;
+let streamCapturing = false;
+let streamInterval = null;
+
+const startCameraStream = () => {
+  // Capture frames periodically using the Python helper and emit base64 JPEGs
+  const script = path.join(__dirname, 'tools', 'capture_image.py');
+  const streamFile = path.join(common.SAVE_DIR, '_stream.jpg');
+  if (streamInterval) return;
+  streamInterval = setInterval(() => {
+    if (streamCapturing) return;
+    streamCapturing = true;
+    exec(`python3 "${script}" "${streamFile}"`, (error) => {
+      streamCapturing = false;
+      if (error) {
+        console.error('Stream capture error:', error);
+        return;
+      }
+      fs.readFile(streamFile, (err, data) => {
+        if (err) return;
+        io.emit('image', data.toString('base64'));
+      });
+    });
+  }, 200); // ~5 FPS to reduce CPU
+};
+
+const stopCameraStream = () => {
+  if (streamInterval) {
+    clearInterval(streamInterval);
+    streamInterval = null;
+  }
+};
 
 server.listen(APP_PORT, () => {
-  console.log("server running on:" + APP_PORT)
+  console.log("server running on:" + APP_PORT);
+  // Do not start automatic streaming by default to avoid camera conflicts.
+  // startCameraStream();
 });
-// Emit frames to the client
-setInterval(() => {
-  const frame = webcam.read();
-  const image = cv.imencode('.jpg', frame).toString('base64');
-  io.emit('image', image);
-  // console.log("emitting data");
-}, 100); // Sends frames at about 10 FPS
-
-
 
 // Handle socket connections
 io.on('connection', (socket) => {

@@ -33,6 +33,7 @@ function CameraAndControls() {
             },
           }).then(response =>{
             console.log(response);
+            window.dispatchEvent(new Event('file-list-update'));
           }).catch(error => {
             console.log(error);
           });
@@ -58,6 +59,8 @@ function CameraAndControls() {
               setIsRecording(true);
             } else {
               setIsRecording(false);
+              // Trigger update when recording stops
+              window.dispatchEvent(new Event('file-list-update'));
             }
           }).catch(error => {
             console.log(error);

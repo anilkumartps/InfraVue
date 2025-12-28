@@ -1,0 +1,15 @@
+nohup: ignoring input
+
+> server@1.0.0 start
+> node index.js
+
+Folder already exists: /home/rpi/rpi_captures
+server running on:3000
+capture request recieved
+Image saved to /home/rpi/rpi_captures/file_141225135525.jpg
+Start recording request received
+FFmpeg error: Error: Input format v4l2 is not available
+    at /home/rpi/Downloads/InfraVue/server/node_modules/fluent-ffmpeg/lib/capabilities.js:608:21
+    at fn (/home/rpi/Downloads/InfraVue/server/node_modules/async/lib/async.js:582:34)
+    at Immediate._onImmediate (/home/rpi/Downloads/InfraVue/server/node_modules/async/lib/async.js:498:34)
+    at process.processImmediate (node:internal/timers:483:21)

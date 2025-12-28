@@ -30,6 +30,18 @@ function FileTable() {
     //     />
     // );
 
+    useEffect(() => {
+        const handleUpdate = () => {
+            console.log("File list update triggered");
+            setTimeout(fetchData, 1000); 
+        };
+
+        window.addEventListener('file-list-update', handleUpdate);
+        return () => {
+            window.removeEventListener('file-list-update', handleUpdate);
+        };
+    }, []);
+
     const fetchData = async () => {
         try {
             const response = await fetch(`${SERVER_IP}/api/filesList`, {
@@ -44,13 +56,23 @@ function FileTable() {
                 throw new Error('Network response was not ok');
             }
             const jsonData = await response.json();
-            setData(jsonData); // update state with the fetched data
+            // Reverse the array to show latest files first
+            // Note: The filesList API returns files in directory order which is usually not sorted by date.
+            // We should sort them by name (which includes timestamp) to be sure.
+            jsonData.sort((a, b) => {
+                if (a.fileName < b.fileName) return 1;
+                if (a.fileName > b.fileName) return -1;
+                return 0;
+            });
+            
+            // setData(jsonData); // update state with the fetched data
             items = [];
             for (let i = 0; i < jsonData.length; i++) {
                 items.push(
                     <TableRowCard key={items.length}
                         imageSrc={jsonData[i].imageSrc}
                         fileName={jsonData[i].fileName}
+                        onRefresh={fetchData}
                     />
                 )
             }

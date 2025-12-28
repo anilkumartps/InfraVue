@@ -1,0 +1,9 @@
+flask
+flask-socketio
+flask-cors
+opencv-python-headless
+eventlet
+numpy
+
+
+

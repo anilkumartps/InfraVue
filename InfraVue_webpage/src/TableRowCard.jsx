@@ -6,7 +6,7 @@ import { bgcolor } from '@mui/system';
 import SERVER_IP from './common';
 
 
-function TableRowCard({ imageSrc, fileName }) {
+function TableRowCard({ imageSrc, fileName, onRefresh }) {
 
   const imgPath = ((imageSrc == "" || imageSrc == undefined) ? "/imgIcon.jpg" : imageSrc);
   const [image, setImage] = useState('');
@@ -15,7 +15,7 @@ function TableRowCard({ imageSrc, fileName }) {
   useEffect(() => {
 
     const fetchImage = () => {
-      fetch(`${SERVER_IP}/api/image_preview/?fileName=${fileName}`, {
+      fetch(`${SERVER_IP}/api/image_preview?fileName=${fileName}`, {
         method: 'GET',
       })
         .then((response) => {
@@ -39,7 +39,7 @@ function TableRowCard({ imageSrc, fileName }) {
   }, []);
 
   const downloadButtonHandler = (fileName) => {
-    fetch(`${SERVER_IP}/api/downloadFile/?fileName=${fileName}`, {
+    fetch(`${SERVER_IP}/api/downloadFile?fileName=${fileName}`, {
       method: 'GET',
     })
       .then(response => {
@@ -66,11 +66,13 @@ function TableRowCard({ imageSrc, fileName }) {
 
   const deleteButtonHandler = (fileName) => {
     if (fileName) {
-      fetch(`${SERVER_IP}/api/deleteFile/?fileName=${fileName}`, {
+      fetch(`${SERVER_IP}/api/deleteFile?fileName=${fileName}`, {
         method: 'GET',
       }).then((response) => {
-        if (response.status == 200)
+        if (response.status == 200) {
           console.log("file Deleted");
+          if (onRefresh) onRefresh();
+        }
       })
     }
   }
