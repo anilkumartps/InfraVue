@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import SERVER_IP from './common';
 
 import SimpleBar from 'simplebar-react';
@@ -8,47 +8,16 @@ import TableRowCard from './TableRowCard';
 
 
 function FileTable() {
-    const [data, setData] = useState(null); // state for the fetched data
+    const [files, setFiles] = useState([]); // state for the fetched file objects
     const [loading, setLoading] = useState(true); // state for loading indication
     const [error, setError] = useState(null); // state for error handling
 
-    let items = [];
-
-    // Use a for loop to populate the array
-    for (let i = 0; i < 10; i++) {
-        items.push(
-            <TableRowCard key={i}
-                imageSrc="https://via.placeholder.com/30"
-                fileName={`File ${i}.txt`}
-            />
-        );
-    }
-    // items.push(
-    //     <TableRowCard key={items.length}
-    //         imageSrc=""
-    //         fileName={`File ${items.length}.txt`}
-    //     />
-    // );
-
-    useEffect(() => {
-        const handleUpdate = () => {
-            console.log("File list update triggered");
-            setTimeout(fetchData, 1000); 
-        };
-
-        window.addEventListener('file-list-update', handleUpdate);
-        return () => {
-            window.removeEventListener('file-list-update', handleUpdate);
-        };
-    }, []);
-
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
             const response = await fetch(`${SERVER_IP}/api/filesList`, {
-                method: 'GET', // or 'POST', 'PUT', 'DELETE', etc.
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Add other headers if needed
                 },
             });
 
@@ -56,45 +25,44 @@ function FileTable() {
                 throw new Error('Network response was not ok');
             }
             const jsonData = await response.json();
-            // Reverse the array to show latest files first
-            // Note: The filesList API returns files in directory order which is usually not sorted by date.
-            // We should sort them by name (which includes timestamp) to be sure.
+            
+            // Sort by filename descending (newest first assuming timestamp in name)
             jsonData.sort((a, b) => {
                 if (a.fileName < b.fileName) return 1;
                 if (a.fileName > b.fileName) return -1;
                 return 0;
             });
             
-            // setData(jsonData); // update state with the fetched data
-            items = [];
-            for (let i = 0; i < jsonData.length; i++) {
-                items.push(
-                    <TableRowCard key={items.length}
-                        imageSrc={jsonData[i].imageSrc}
-                        fileName={jsonData[i].fileName}
-                        onRefresh={fetchData}
-                    />
-                )
-            }
-            setData(items);
+            setFiles(jsonData);
         } catch (err) {
             setError(err.message);
         } finally {
-            setLoading(false); // indicate that loading is complete
+            setLoading(false);
         }
-    };
-
-
-    // Fetch the JSON data inside useEffect
-    useEffect(() => {
-        fetchData();
     }, []);
 
-    if (loading) {
+    useEffect(() => {
+        // Initial fetch
+        fetchData();
+
+        // Listener for updates (e.g. from capture/recording)
+        const handleUpdate = () => {
+            console.log("File list update triggered");
+            // Small delay to ensure file system has updated
+            setTimeout(fetchData, 1000); 
+        };
+
+        window.addEventListener('file-list-update', handleUpdate);
+        return () => {
+            window.removeEventListener('file-list-update', handleUpdate);
+        };
+    }, [fetchData]);
+
+    if (loading && files.length === 0) {
         return <div>Loading...</div>;
     }
 
-    if (error) {
+    if (error && files.length === 0) {
         return <div>Error: {error}</div>;
     }
 
@@ -103,10 +71,16 @@ function FileTable() {
             <SimpleBar style={{ maxHeight: '100%' }}>
                 <div>
                     <h1 className="m-4 font-bold text-2xl">Gallery</h1>
-                    {/* {data} */}
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3">
-                    {data}
+                    {files.map((file, index) => (
+                        <TableRowCard 
+                            key={file.fileName} // Use fileName as key if unique, otherwise index
+                            imageSrc={file.imageSrc}
+                            fileName={file.fileName}
+                            onRefresh={fetchData}
+                        />
+                    ))}
                 </div>
             </SimpleBar>
 

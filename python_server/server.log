@@ -1,0 +1,20 @@
+[0:27:39.369025494] [8923] [1;32m INFO [1;37mCamera [1;34mcamera_manager.cpp:340 [0mlibcamera v0.6.0+rpt20251202
+[0:27:39.377615862] [8934] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:720 [0mlibpisp version 1.3.0
+[0:27:39.379996467] [8934] [1;32m INFO [1;37mIPAProxy [1;34mipa_proxy.cpp:180 [0mUsing tuning file /usr/share/libcamera/ipa/rpi/pisp/ov5647.json
+[0:27:39.386740265] [8934] [1;32m INFO [1;37mCamera [1;34mcamera_manager.cpp:223 [0mAdding camera '/base/axi/pcie@1000120000/rp1/i2c@88000/ov5647@36' for pipeline handler rpi/pisp
+[0:27:39.386773043] [8934] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1181 [0mRegistered camera /base/axi/pcie@1000120000/rp1/i2c@88000/ov5647@36 to CFE device /dev/media0 and ISP device /dev/media2 using PiSP variant BCM2712_D0
+[0:27:39.389597796] [8923] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 640x480-RGB888/sRGB (1) 640x480-GBRG_PISP_COMP1/RAW
+[0:27:39.389698666] [8934] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1485 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@88000/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10/RAW - Selected CFE format: 640x480-PC1g/RAW
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+Camera capture loop started
+Starting Python server on port 3000
+ * Serving Flask app 'app'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:3000
+ * Running on http://192.168.1.9:3000
+[33mPress CTRL+C to quit[0m
+192.168.1.7 - - [28/Dec/2025 19:17:57] "GET /socket.io/?EIO=4&transport=polling&t=PjbDq0W HTTP/1.1" 200 -
+192.168.1.7 - - [28/Dec/2025 19:17:57] "POST /socket.io/?EIO=4&transport=polling&t=PjbDq13&sid=tMvYLG0kDxYgXXR3AAAA HTTP/1.1" 200 -
+192.168.1.7 - - [28/Dec/2025 19:17:57] "GET /socket.io/?EIO=4&transport=polling&t=PjbDq19&sid=tMvYLG0kDxYgXXR3AAAA HTTP/1.1" 200 -

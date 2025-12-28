@@ -3,24 +3,14 @@ import { useState, useEffect } from 'react'
 import { io } from 'socket.io-client';
 
 import Button from '@mui/material/Button';
-import Slider from '@mui/material/Slider';
-import Stack from '@mui/material/Stack';
-import BrightnessHighIcon from '@mui/icons-material/BrightnessHigh';
-import BrightnessLowIcon from '@mui/icons-material/BrightnessLow';
-
 import SERVER_IP from './common';
 
 const socket = io(SERVER_IP);
 
 function CameraAndControls() {
 
-    const [sliderValue, setSliderValue] = useState(30);
     const [cameraImage, setCameraImage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
-
-    const handleChange = (event, newValue) => {
-        setSliderValue(newValue);
-    };
 
     const captureButtonHandler = () =>{
         console.log("capture button click handler");
@@ -130,22 +120,6 @@ function CameraAndControls() {
                     >
                         {isRecording ? "Stop Recording" : "Start Recording"}
                     </Button>
-                </div>
-
-                <div className='m-4 h-auto bg-gray-800 p-4 rounded-[20px]'>
-                    <h1 className="font-bold"> Torch Light</h1>
-                    <Stack spacing={2} direction="row" sx={{ mb: 1 }} alignItems="center">
-                        <BrightnessLowIcon />
-                        <Slider
-                            value={sliderValue}
-                            onChange={handleChange}
-                            aria-labelledby="continuous-slider"
-                            valueLabelDisplay="auto"
-                            min={0}
-                            max={100}
-                        />
-                        <BrightnessHighIcon />
-                    </Stack>
                 </div>
             </div>
 
